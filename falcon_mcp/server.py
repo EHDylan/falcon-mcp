@@ -20,6 +20,38 @@ from falcon_mcp.common.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
 
+# Middleware for API Key Authentication
+class APIKeyAuthMiddleware:
+    """
+    ASGI middleware to enforce API key authentication on HTTP transports.
+    """
+    def __init__(self, app, api_key: Optional[str]):
+        self.app = app
+        self.api_key = api_key
+
+    async def __call__(self, scope, receive, send):
+        # This middleware only applies to HTTP requests
+        if self.api_key and scope["type"] == "http":
+            headers = dict(scope.get("headers", []))
+            provided_key = headers.get(b"x-api-key")
+
+            if not provided_key or provided_key.decode("utf-8") != self.api_key:
+                # If key is missing or incorrect, send a 401 Unauthorized response
+                response_headers = [(b"content-type", b"application/json")]
+                response_body = b'{"detail": "Invalid or missing API key"}'
+                await send({
+                    "type": "http.response.start",
+                    "status": 401,
+                    "headers": response_headers,
+                })
+                await send({
+                    "type": "http.response.body",
+                    "body": response_body,
+                })
+                return  # Stop processing the request
+
+        # If authentication passes or is not required, proceed to the main app
+        await self.app(scope, receive, send)
 
 class FalconMCPServer:
     """Main server class for the Falcon MCP server."""
@@ -43,6 +75,7 @@ class FalconMCPServer:
         self.base_url = base_url
         self.debug = debug
         self.user_agent_comment = user_agent_comment
+        self.api_key = api_key
 
         self.enabled_modules = enabled_modules or set(registry.get_module_names())
 
@@ -191,7 +224,13 @@ class FalconMCPServer:
             # Get the ASGI app from FastMCP
             app = self.server.sse_app()
 
-            # Run with uvicorn for custom host/port configuration
+            # If an API key is configured, wrap the app with the auth middleware.
+            if self.api_key:
+                logger.info("API key authentication is ENABLED for HTTP transport.")
+                app = APIKeyAuthMiddleware(app, api_key=self.api_key)
+            else:
+                logger.warning("API key authentication is DISABLED for HTTP transport.")
+                
             uvicorn.run(
                 app,
                 host=host,
@@ -298,7 +337,13 @@ def parse_args():
         default=os.environ.get("FALCON_MCP_USER_AGENT_COMMENT"),
         help="Additional information to include in the User-Agent comment section (env: FALCON_MCP_USER_AGENT_COMMENT)",
     )
-
+    
+    parser.add_argument(
+        "--api-key",
+        default=os.environ.get("FALCON_MCP_API_KEY"),
+        help="API key for securing HTTP transports (env: FALCON_MCP_API_KEY)",
+    )
+    
     return parser.parse_args()
 
 
@@ -317,6 +362,7 @@ def main():
             debug=args.debug,
             enabled_modules=set(args.modules),
             user_agent_comment=args.user_agent_comment,
+            api_key=args.api_key,
         )
         logger.info("Starting server with %s transport", args.transport)
         server.run(args.transport, host=args.host, port=args.port)
