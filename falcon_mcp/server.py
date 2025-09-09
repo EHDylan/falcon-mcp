@@ -34,10 +34,12 @@ class APIKeyAuthMiddleware:
         # This middleware only applies to HTTP requests
         if self.api_key and scope["type"] == "http":
             headers = dict(scope.get("headers", []))
+            # The header keys are bytes, so we look for b'x-api-key'
             provided_key = headers.get(b"x-api-key")
 
             if not provided_key or provided_key.decode("utf-8") != self.api_key:
                 # If key is missing or incorrect, send a 401 Unauthorized response
+                logger.warning("Invalid or missing API key received.")
                 response_headers = [(b"content-type", b"application/json")]
                 response_body = b'{"detail": "Invalid or missing API key"}'
                 await send({
@@ -201,8 +203,10 @@ class FalconMCPServer:
             logger.info("Starting %s server on %s:%d", transport, host, port)
 
             if transport == "streamable-http":
+                # Get the ASGI app for streamable-http
                 app = self.server.streamable_http_app()
             else:  # sse
+                # Get the ASGI app for sse
                 app = self.server.sse_app()
 
             # The FIX: Wrap the app with the middleware before passing it to uvicorn.run
