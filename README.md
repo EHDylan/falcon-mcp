@@ -698,23 +698,44 @@ To deploy the MCP server as an agent within Cloud Run or Vertex AI Agent Engine 
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all unit tests
 pytest
 
-# Run end-to-end tests
+# Run end-to-end tests (requires API credentials)
 pytest --run-e2e tests/e2e/
 
 # Run end-to-end tests with verbose output (note: -s is required to see output)
 pytest --run-e2e -v -s tests/e2e/
+
+# Run integration tests (requires API credentials)
+pytest --run-integration tests/integration/
+
+# Run integration tests with verbose output
+pytest --run-integration -v -s tests/integration/
+
+# Run integration tests for a specific module
+pytest --run-integration tests/integration/test_detections.py
 ```
 
-> **Note**: The `-s` flag is required to see detailed output from E2E tests.
+> **Note**: The `-s` flag is required to see detailed output from E2E and integration tests.
+
+#### Integration Tests
+
+Integration tests make real API calls to validate FalconPy operation names, HTTP methods, and response schemas. They catch issues that mocked unit tests cannot detect:
+
+- Incorrect FalconPy operation names (typos)
+- HTTP method mismatches (POST body vs GET query parameters)
+- Two-step search patterns not returning full details
+- API response schema changes
+
+**Requirements**: Valid CrowdStrike API credentials must be configured (see [Environment Configuration](#environment-configuration)).
 
 ### Developer Documentation
 
-- [Module Development Guide](docs/module_development.md): Instructions for implementing new modules
-- [Resource Development Guide](docs/resource_development.md): Instructions for implementing resources
-- [End-to-End Testing Guide](docs/e2e_testing.md): Guide for running and understanding E2E tests
+- [Module Development Guide](docs/development/module_development.md): Instructions for implementing new modules
+- [Resource Development Guide](docs/development/resource_development.md): Instructions for implementing resources
+- [End-to-End Testing Guide](docs/development/e2e_testing.md): Guide for running and understanding E2E tests
+- [Integration Testing Guide](docs/development/integration_testing.md): Guide for running integration tests with real API calls
 
 ## License
 
